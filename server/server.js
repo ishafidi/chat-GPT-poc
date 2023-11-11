@@ -39,6 +39,32 @@ function excludeAttributes(jsonObj, attributesToExclude) {
 
 // Chat history stored in memory
 const chatHistory = [];
+async function addToCart(productId, quantity) {
+  console.log("#################### AD PRODUCT  TOO CAART "+productId,quantity)
+  try {
+    const url = 'https://localhost:9002/occ/v2/electronics/users/anonymous/carts/22a7f000-2aa2-4f78-aa3f-2503eb98a687/entries';
+    const data = {
+      product: {
+        code: productId,
+      },
+      quantity: quantity,
+    };
+
+    const response = await axios.post(url, data);
+
+    if (response.status === 200) {
+      console.log('Product added to the cart successfully.');
+      return response.data;
+    } else {
+      console.error('Failed to add the product to the cart:', response.status, response.statusText);
+      return null;
+    }
+  } catch (error) {
+    console.error('An error occurred while adding the product to the cart:', error);
+    return null;
+  }
+}
+
 
 async function searchProductsInHM(query) {
   try {
@@ -128,6 +154,20 @@ async function runGPTConversation(userPrompt) {
         required: ['query'],
       },
     },
+    {
+      name: 'add_to_cart',
+      description: 'add a product to the cart by calling a POST API',
+      parameters: {
+        type: 'object',
+        properties: {
+          productId: {
+            type: 'string',
+            description: 'The ID of the product to add to the cart',
+          },
+        },
+        required: ['productId'],
+      },
+    },
   ];
 
   const response = await openai.chat.completions.create({
@@ -142,6 +182,7 @@ async function runGPTConversation(userPrompt) {
 
   return response.choices[0].message;
 }
+// ... (existing code)
 
 app.post('/', async (req, res) => {
   try {
@@ -149,39 +190,57 @@ app.post('/', async (req, res) => {
     const responseMessage = await runGPTConversation(userPrompt);
 
     if (responseMessage.function_call) {
-      const availableFunctions = {
-        search_products_in_electronics: searchProductsInElectronics,
-        search_products_in_HM: searchProductsInHM,
-      };
-
       const functionName = responseMessage.function_call.name;
-      const functionToCall = availableFunctions[functionName];
-      const functionArgs = JSON.parse(responseMessage.function_call.arguments);
-      const functionResponse = await functionToCall(functionArgs.query);
+      const functionToCall = {
+        search_products_in_electronics:searchProductsInElectronics,
+        search_products_in_HM:searchProductsInElectronics,
+        add_to_cart: addToCart,
+      }[functionName];
 
+      if (functionToCall) {
+        const functionArgs = JSON.parse(responseMessage.function_call.arguments);
+        const functionResponse = await functionToCall(functionArgs.query || functionArgs.productId,functionArgs.quantity);
+
+        const messages = [
+          responseMessage,
+          {
+            role: 'function',
+            name: functionName,
+            content: JSON.stringify(functionResponse),
+          },
+        ];
+
+        const secondResponse = await openai.chat.completions.create({
+          model: 'gpt-3.5-turbo',
+          messages,
+        });
+
+        chatHistory.push(secondResponse.choices[0].message);
+
+        res.status(200).send({
+          bot: secondResponse.choices[0].message.content,
+        });
+      } else {
+        console.error('Function not found:', functionName);
+        res.status(500).json({ error: 'Function not found' });
+      }
+    } else {
+      // Handling non-function calls
+      // If you have additional logic or messages to add for non-function calls, you can do it here
       const messages = [
         responseMessage,
-        {
-          role: 'function',
-          name: functionName,
-          content: JSON.stringify(functionResponse),
-        },
+        // Optionally, add more messages or logic here based on your requirements
       ];
 
       const secondResponse = await openai.chat.completions.create({
         model: 'gpt-3.5-turbo',
-        messages: messages,
+        messages,
       });
 
-      // Store the new chat history
       chatHistory.push(secondResponse.choices[0].message);
 
       res.status(200).send({
         bot: secondResponse.choices[0].message.content,
-      });
-    } else {
-      res.status(200).send({
-        bot: responseMessage.content,
       });
     }
   } catch (error) {
@@ -189,5 +248,8 @@ app.post('/', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+
+
 
 app.listen(5000, () => console.log('AI server started on http://localhost:5000'));
