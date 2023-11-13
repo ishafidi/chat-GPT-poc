@@ -50,7 +50,7 @@ async function addToCart(productId, quantity) {
       quantity: quantity,
     };
 
-    const response = await axios.post(url, data);
+    const response = await axios.post(url, data,{ httpsAgent: new https.Agent({ rejectUnauthorized: false }) });
 
     if (response.status === 200) {
       console.log('Product added to the cart successfully.');
@@ -164,8 +164,12 @@ async function runGPTConversation(userPrompt) {
             type: 'string',
             description: 'The ID of the product to add to the cart',
           },
+          quantity: {
+            type: 'integer',
+            description: 'The quantity of the product to be added to the cart',
+          },
         },
-        required: ['productId'],
+        required: ['productId','quantity'],
       },
     },
   ];
