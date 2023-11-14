@@ -7,7 +7,7 @@ import https from 'https'
 dotenv.config();
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-console.log('Environment variables:', process.env);
+
 const openai = new OpenAI({ apiKey:process.env.OPENAI_API_KEY});
 
 const app = express();
@@ -65,6 +65,47 @@ async function addToCart(productId, quantity) {
   }
 }
 
+async function getCart(cartUID) {
+  console.log("#################### Get Cart "+cartUID)
+  try {
+    const url = 'https://localhost:9002/occ/v2/electronics/users/anonymous/carts/22a7f000-2aa2-4f78-aa3f-2503eb98a687';
+  
+
+    const response = await axios.get(url,{ httpsAgent: new https.Agent({ rejectUnauthorized: false }) });
+
+    if (response.status === 200) {
+      console.log('get the cart successfully.');
+      return response.data;
+    } else {
+      console.error('Failed to get the cart:', response.status, response.statusText);
+      return null;
+    }
+  } catch (error) {
+    console.error('Failed to get the cart:', error);
+    return null;
+  }
+}
+async function deleteCartEntry(entryNum) {
+  try {
+    const url = `https://localhost:9002/occ/v2/electronics/users/anonymous/carts/22a7f000-2aa2-4f78-aa3f-2503eb98a687/entries/${entryNum}`;
+  
+    const response = await axios.delete(url, {
+      httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+    });
+
+    if (response.status === 200) {
+      console.log('The cart entry has been deleted successfully.');
+      return 'The cart entry has been deleted successfully.';
+    } else {
+      console.error('Failed to delete the cart entry:', response.status, response.statusText);
+      return null;
+    }
+  } catch (error) {
+    console.error('Failed to delete the cart entry:', error);
+    return null;
+  }
+}
+
 
 async function searchProductsInHM(query) {
   try {
@@ -75,7 +116,7 @@ async function searchProductsInHM(query) {
 
     if (response.status === 200) {
       if (typeof response.data !== 'undefined') {
-       const attributesToExclude = ['all_categories_codes', 'category_path','folder_rankings','v_available_size_options','nonProductSuggestions','autocomplete','v_gallery_images','v_size_filters','attributes','topSearches','didYouMean','v_available_size_codes','v_available_size_rate','v_categories_names','v_color_code','v_color_filter','v_fashion_image'];
+       const attributesToExclude = ['autocomplete','all_categories_codes', 'category_path','folder_rankings','v_available_size_options','nonProductSuggestions','autocomplete','v_gallery_images','v_size_filters','v_available_in_store','v_article_type','v_fashion_image','v_article_order','v_composition_types','topSearches','didYouMean','v_available_size_codes','v_available_size_rate','v_categories_names','v_color_code','v_color_filter','v_fashion_image','ticket','v_material_name','v_size_filters','v_still_life_image','v_turnToSku','v_yellowprice','v_has_blueprice','v_colour_description','v_color_filter','v_color_code','v_available_size_rate','v_stylewith','v_currentlyForSaleOnSite','v_formatted_blueprice','v_formatted_yellowprice','v_has_yellowprice','v_is_old_sale','v_imagesID_lis','v_hybris_color_code','v_is_preshoppin','v_member_label','v_percentageDiscount','v_stylewith','v_sust_composition_materials','all_article_images','department_categories_codes','main_category_code','presentation_product_types','product_pk'];
        const modifiedJson = excludeAttributes(response.data, attributesToExclude);
        console.error(' modifiedJson response from Aptus Search Engine :'+JSON.stringify(modifiedJson));
         return modifiedJson;
@@ -172,6 +213,34 @@ async function runGPTConversation(userPrompt) {
         required: ['productId','quantity'],
       },
     },
+    {
+      name: 'get_cart',
+      description: 'get Cart Details by a GET API Call',
+      parameters: {
+        type: 'object',
+        properties: {
+          cartUID: {
+            type: 'string',
+            description: 'The ID of the cart',
+          },
+        },
+        required: ['cartUID'],
+      },
+    },
+    {
+      name: 'delete_cart_entry',
+      description: 'Delete a cart entry by calling the SAP OCC v2 API.',
+      parameters: {
+        type: 'object',
+        properties: {
+          entryNumber: {
+            type: 'integer',
+            description: 'The number of the entry to be deleted.',
+          },
+        },
+        required: ['entryNumber'],
+      },
+    },
   ];
 
   const response = await openai.chat.completions.create({
@@ -183,6 +252,7 @@ async function runGPTConversation(userPrompt) {
 
   // Store the new chat history
   chatHistory.push(response.choices[0].message);
+
 
   return response.choices[0].message;
 }
@@ -197,14 +267,33 @@ app.post('/', async (req, res) => {
       const functionName = responseMessage.function_call.name;
       const functionToCall = {
         search_products_in_electronics:searchProductsInElectronics,
-        search_products_in_HM:searchProductsInElectronics,
+        search_products_in_HM:searchProductsInHM,
         add_to_cart: addToCart,
+        get_cart:getCart,
+        delete_cart_entry: deleteCartEntry,
       }[functionName];
 
       if (functionToCall) {
         const functionArgs = JSON.parse(responseMessage.function_call.arguments);
-        const functionResponse = await functionToCall(functionArgs.query || functionArgs.productId,functionArgs.quantity);
+        console.log('functionArgs:', functionArgs);
 
+        // Extract parameters based on the function name
+        let functionResponse;
+        if (functionName === 'delete_cart_entry') {
+          const entryNumber = functionArgs.entryNumber;
+          console.log('functionArgs for delete cart entry is :', entryNumber);
+          functionResponse = await functionToCall(entryNumber);
+        } else if (functionName === 'search_products_in_electronics') {
+          functionResponse = await functionToCall(functionArgs.query);
+        } else if (functionName === 'add_to_cart') {
+          functionResponse = await functionToCall(functionArgs.productId ,functionArgs.quantity );
+        } else if (functionName === 'get_cart') {
+          functionResponse = await functionToCall( );
+        }else if (functionName === 'search_products_in_HM') {
+          functionResponse = await functionToCall(functionArgs.query);
+        }
+
+        console.log('Function response:', functionResponse);
         const messages = [
           responseMessage,
           {
