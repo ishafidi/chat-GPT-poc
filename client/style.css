@@ -148,3 +148,16 @@ form img {
   width: 30px;
   height: 30px;
 }
+#start_voice {
+  background-color: #4caf50; /* Green background color */
+  color: white; /* White text color */
+  padding: 10px 20px; /* Add padding to make it larger */
+  font-size: 16px; /* Increase font size */
+  cursor: pointer; /* Add a pointer cursor on hover */
+  border: none; /* Remove border */
+  border-radius: 5px; /* Add border radius for rounded corners */
+}
+
+#start_voice:hover {
+  background-color: #45a049; /* Darker green on hover */
+}

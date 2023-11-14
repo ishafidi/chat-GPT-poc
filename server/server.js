@@ -4,6 +4,7 @@ import cors from 'cors';
 import OpenAI from "openai";
 import axios from 'axios';
 import https from 'https'
+import * as speechToText from 'speech-to-text';
 dotenv.config();
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -220,7 +221,30 @@ async function searchProductsInElectronics(query) {
 
 }
 
-
+// Function to convert speech to text using the speech-to-text library
+async function convertSpeechToText(audioBuffer) {
+  return new Promise((resolve, reject) => {
+    speechToText.recognize(
+      {
+        audio: {
+          content: audioBuffer.toString('base64'),
+        },
+        config: {
+          encoding: 'LINEAR16',
+          sampleRateHertz: 16000,
+          languageCode: 'en-US',
+        },
+      },
+      (err, response) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(response);
+        }
+      }
+    );
+  });
+}
 
 async function runGPTConversation(userPrompt) {
   const messages = [...chatHistory, { role: 'user', content: userPrompt }];
@@ -359,7 +383,18 @@ async function runGPTConversation(userPrompt) {
 
 app.post('/', async (req, res) => {
   try {
-    const userPrompt = req.body.prompt;
+    let userPrompt;
+
+    // Check if the request contains audio data
+    if (req.body.audio) {
+      // Convert speech to text
+      const speechRecognitionResult = await convertSpeechToText(req.body.audio);
+      userPrompt = speechRecognitionResult.results[0]?.alternatives[0]?.transcript || '';
+    } else {
+      // If no audio data, use the text prompt
+      userPrompt = req.body.prompt;
+    }
+
     const responseMessage = await runGPTConversation(userPrompt);
 
     if (responseMessage.function_call) {
