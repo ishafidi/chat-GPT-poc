@@ -65,6 +65,64 @@ async function addToCart(productId, quantity) {
   }
 }
 
+
+async function updateCartEntryQuantity(entryNum, newQuantity) {
+  try {
+    const url = `https://localhost:9002/occ/v2/electronics/users/anonymous/carts/22a7f000-2aa2-4f78-aa3f-2503eb98a687/entries/${entryNum}?fields=DEFAULT`;
+
+    const data = {
+      quantity: newQuantity,
+    };
+
+    const response = await axios.put(url, data, {
+      httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+      headers: {
+        'accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (response.status === 200) {
+      console.log('Cart entry quantity updated successfully.');
+      return response.data;
+    } else {
+      console.error('Failed to update cart entry quantity:', response.status, response.statusText);
+      return null;
+    }
+  } catch (error) {
+    console.error('An error occurred while updating cart entry quantity:', error);
+    return null;
+  }
+}
+
+async function getAppliedVouchers(baseSiteId, userId, cartId) {
+   baseSiteId = 'electronics';
+   userId = 'anonymous';
+   cartId = '22a7f000-2aa2-4f78-aa3f-2503eb98a687';
+  try {
+    const url = `https://localhost:9002/occ/v2/${baseSiteId}/users/${userId}/carts/${cartId}/vouchers`;
+
+    const response = await axios.get(url, {
+      httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+      headers: {
+        'accept': 'application/json',
+      },
+    });
+
+    if (response.status === 200) {
+      console.log('Successfully retrieved applied vouchers.');
+      return response.data;
+    } else {
+      console.error('Failed to retrieve applied vouchers:', response.status, response.statusText);
+      return null;
+    }
+  } catch (error) {
+    console.error('An error occurred while retrieving applied vouchers:', error);
+    return null;
+  }
+}
+
+
 async function getCart(cartUID) {
   console.log("#################### Get Cart "+cartUID)
   try {
@@ -241,10 +299,51 @@ async function runGPTConversation(userPrompt) {
         required: ['entryNumber'],
       },
     },
+    {
+      name: 'update_cart_entry_quantity',
+      description: 'update quantity of a cart entry by calling a PUT API',
+      parameters: {
+        type: 'object',
+        properties: {
+          entryNumber: {
+            type: 'integer',
+            description: 'The entry number of the cart entry to update',
+          },
+          newQuantity: {
+            type: 'integer',
+            description: 'The new quantity for the cart entry',
+          },
+        },
+        required: ['entryNumber', 'newQuantity'],
+      },
+    },
+    {
+      name: 'get_applied_vouchers',
+      description: 'get applied vouchers for a cart by calling a GET API',
+      parameters: {
+        type: 'object',
+        properties: {
+          baseSiteId: {
+            type: 'string',
+            description: 'The base site ID',
+          },
+          userId: {
+            type: 'string',
+            description: 'The user ID',
+          },
+          cartId: {
+            type: 'string',
+            description: 'The cart ID',
+          },
+        },
+        required: ['baseSiteId', 'userId', 'cartId'],
+      },
+    },
+    
   ];
 
   const response = await openai.chat.completions.create({
-    model: 'gpt-3.5-turbo',
+    model: 'gpt-4',
     messages: messages,
     functions: functions,
     function_call: 'auto',
@@ -271,6 +370,8 @@ app.post('/', async (req, res) => {
         add_to_cart: addToCart,
         get_cart:getCart,
         delete_cart_entry: deleteCartEntry,
+        update_cart_entry_quantity:updateCartEntryQuantity,
+        get_applied_vouchers:getAppliedVouchers, 
       }[functionName];
 
       if (functionToCall) {
@@ -291,6 +392,10 @@ app.post('/', async (req, res) => {
           functionResponse = await functionToCall( );
         }else if (functionName === 'search_products_in_HM') {
           functionResponse = await functionToCall(functionArgs.query);
+        } else if (functionName ==='update_cart_entry_quantity'){
+          functionResponse = await functionToCall(functionArgs.entryNumber ,functionArgs.newQuantity );
+        }else if (functionName ==='get_applied_vouchers'){
+          functionResponse = await functionToCall(functionArgs.baseSiteId ,functionArgs.userId ,functionArgs.cartId);
         }
 
         console.log('Function response:', functionResponse);
@@ -304,7 +409,7 @@ app.post('/', async (req, res) => {
         ];
 
         const secondResponse = await openai.chat.completions.create({
-          model: 'gpt-3.5-turbo',
+          model: 'gpt-4',
           messages,
         });
 
