@@ -4,17 +4,17 @@ import user from './assets/user.svg';
 const form = document.querySelector('form');
 const chatContainer = document.querySelector('#chat_container');
 const startVoiceButton = document.querySelector('#start_voice');
+const stopReadingButton = document.querySelector('#stop_reading');
 
+let recognition;
+let utterance;
 let loadInterval;
 
 function loader(element) {
   element.textContent = '';
 
   loadInterval = setInterval(() => {
-    // Update the text content of the loading indicator
     element.textContent += '.';
-
-    // If the loading indicator has reached three dots, reset it
     if (element.textContent === '....') {
       element.textContent = '';
     }
@@ -27,6 +27,7 @@ function typeText(element, text) {
   let interval = setInterval(() => {
     if (index < text.length) {
       element.innerHTML += text.charAt(index);
+      speakText(text.charAt(index));
       index++;
     } else {
       clearInterval(interval);
@@ -55,21 +56,36 @@ function chatStripe(isAi, value, uniqueId) {
             <div class="message" id=${uniqueId}>${value}</div>
         </div>
     </div>
-`;
+  `;
+}
+
+function speakText(text) {
+  const synth = window.speechSynthesis;
+  utterance = new SpeechSynthesisUtterance(text);
+  synth.speak(utterance);
+}
+
+function stopRecognition() {
+  if (recognition) {
+    recognition.stop();
+  }
+}
+
+function stopSpeechSynthesis() {
+  window.speechSynthesis.cancel();
 }
 
 // Function to start voice input
 async function startVoiceInput() {
-    console.log('Starting voice input...');
+  console.log('Starting voice input...');
   try {
-    // Your code to start voice recognition
-    const recognition = new webkitSpeechRecognition();
-    recognition.start();
+    recognition = new (webkitSpeechRecognition || SpeechRecognition)();
+    recognition.lang = 'en-US';
 
     recognition.onresult = (event) => {
-        console.log('Voice recognition result:', event.results[0][0].transcript);
-        const speechToText = event.results[0][0].transcript;
-        form.querySelector('textarea[name="prompt"]').value = speechToText;
+      console.log('Voice recognition result:', event.results[0][0].transcript);
+      const speechToText = event.results[0][0].transcript;
+      form.querySelector('textarea[name="prompt"]').value = speechToText;
 
       // Trigger form submission with voice input
       form.dispatchEvent(new Event('submit'));
@@ -78,12 +94,25 @@ async function startVoiceInput() {
     recognition.onerror = (event) => {
       console.error('Voice recognition error:', event.error);
     };
+
+    recognition.onend = () => {
+      console.log('Voice recognition ended.');
+      stopSpeechSynthesis();
+    };
+
+    recognition.start();
   } catch (error) {
     console.error('Error initializing voice recognition:', error);
   }
 }
 
 startVoiceButton.addEventListener('click', startVoiceInput);
+
+stopReadingButton.addEventListener('click', () => {
+  // Stop speech synthesis and recognition
+  stopSpeechSynthesis();
+  stopRecognition();
+});
 
 const handleSubmit = async (e) => {
   e.preventDefault();
@@ -109,29 +138,53 @@ const handleSubmit = async (e) => {
   // messageDiv.innerHTML = "..."
   loader(messageDiv);
 
-  const response = await fetch('http://localhost:5000', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      prompt: data.get('prompt'),
-    }),
-  });
+  try {
+    const response = await fetch('http://localhost:5000', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: data.get('prompt'),
+      }),
+    });
 
-  clearInterval(loadInterval);
-  messageDiv.innerHTML = ' ';
+    clearInterval(loadInterval);
+    messageDiv.innerHTML = ' ';
 
-  if (response.ok) {
-    const responseData = await response.json();
-    const parsedData = responseData.bot.trim(); // trims any trailing spaces/'\n'
+    if (response.ok) {
+      const responseData = await response.json();
+      const parsedData = responseData.bot.trim();
 
-    typeText(messageDiv, parsedData);
-  } else {
-    const err = await response.text();
+      // bot's chatstripe
+      const uniqueId = generateUniqueId();
+      chatContainer.innerHTML += chatStripe(true, ' ', uniqueId);
+      // to focus scroll to the bottom
+      chatContainer.scrollTop = chatContainer.scrollHeight;
 
-    messageDiv.innerHTML = 'Something went wrong';
-    alert(err);
+      // specific message div
+      const messageDiv = document.getElementById(uniqueId);
+
+      // messageDiv.innerHTML = "..."
+      loader(messageDiv);
+
+      // Speak the response
+      speakText(parsedData);
+
+      // Update the messageDiv with the parsedData
+      typeText(messageDiv, parsedData);
+    } else {
+      // Handle errors
+      const err = await response.text();
+      // Log the error
+      console.error('API Error:', err);
+      // Display error message in the messageDiv
+      messageDiv.innerHTML = 'Something went wrong: ' + err;
+      alert(err);
+    }
+  } catch (error) {
+    // Log any unexpected errors
+    console.error('Unexpected error:', error);
   }
 };
 

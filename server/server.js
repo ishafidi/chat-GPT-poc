@@ -367,7 +367,7 @@ async function runGPTConversation(userPrompt) {
   ];
 
   const response = await openai.chat.completions.create({
-    model: 'gpt-4',
+    model: 'gpt-4-1106-preview',
     messages: messages,
     functions: functions,
     function_call: 'auto',
@@ -444,7 +444,7 @@ app.post('/', async (req, res) => {
         ];
 
         const secondResponse = await openai.chat.completions.create({
-          model: 'gpt-4',
+          model: 'gpt-4-1106-preview',
           messages,
         });
 
@@ -466,7 +466,7 @@ app.post('/', async (req, res) => {
       ];
 
       const secondResponse = await openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-4-1106-preview',
         messages,
       });
 
