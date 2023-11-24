@@ -23,6 +23,15 @@ function excludeAttributes(jsonObj, attributesToExclude) {
   }
 
   for (const attr of attributesToExclude) {
+  if (jsonObj.hasOwnProperty("v_article_name")) {
+        const aArtVal = jsonObj.v_article_name;
+        if (JSON.stringify(aArtVal).includes("jpg")){
+        } else {
+            jsonObj.v_article_name=jsonObj.v_article_name+":"+jsonObj.v_fashion_image_base_url[0];
+            console.error('jsonObj.v_article_name: '+jsonObj.v_article_name);
+        }
+      }
+//jsonObj.productSuggestions[0].products[0].variants[0].attributes.v_fashion_image_base_url[0]
     if (jsonObj.hasOwnProperty(attr)) {
       delete jsonObj[attr];
     }
@@ -177,7 +186,11 @@ async function searchProductsInHM(query) {
       if (typeof response.data !== 'undefined') {
        const attributesToExclude = ['autocomplete','all_categories_codes', 'category_path','folder_rankings','v_available_size_options','nonProductSuggestions','autocomplete','v_gallery_images','v_size_filters','v_available_in_store','v_article_type','v_fashion_image','v_article_order','v_composition_types','topSearches','didYouMean','v_available_size_codes','v_available_size_rate','v_categories_names','v_color_code','v_color_filter','v_fashion_image','ticket','v_material_name','v_size_filters','v_still_life_image','v_turnToSku','v_yellowprice','v_has_blueprice','v_colour_description','v_color_filter','v_color_code','v_available_size_rate','v_stylewith','v_currentlyForSaleOnSite','v_formatted_blueprice','v_formatted_yellowprice','v_has_yellowprice','v_is_old_sale','v_imagesID_lis','v_hybris_color_code','v_is_preshoppin','v_member_label','v_percentageDiscount','v_stylewith','v_sust_composition_materials','all_article_images','department_categories_codes','main_category_code','presentation_product_types','product_pk'];
        const modifiedJson = excludeAttributes(response.data, attributesToExclude);
-       console.error(' modifiedJson response from Aptus Search Engine :'+JSON.stringify(modifiedJson));
+       console.error('RESPONSE: '+JSON.stringify(response.data.productSuggestions[0].products[0].variants[0].attributes.v_fashion_image_base_url[0]));
+       //console.error('Request: '+query);
+       console.error('Data: '+query);
+       //modifiedJson.prompt("https://image.hm.com/assets/hm/cd/2d/cd2d99b096b5386881d7ac895c1f2f4eaadacec7.jpg");
+       //console.error(' modifiedJson response from Aptus Search Engine :'+JSON.stringify(modifiedJson));
         return modifiedJson;
       
       } else {
